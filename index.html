@@ -1,667 +1,655 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice Generator (Tally Format)</title>
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- React & ReactDOM (Loaded via CDN for standalone use) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  
-  <!-- Babel (Compiles React code in the browser) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <style>
-    /* --- CSS FOR PRINTING --- */
-    @media print {
-      /* Add standard page margins to prevent physical printer clipping */
-      @page {
-        size: A4;
-        margin: 10mm;
-      }
-      
-      body {
-        background-color: white !important;
-      }
-
-      body * {
-        visibility: hidden;
-      }
-
-      #printable-invoice, #printable-invoice * {
-        visibility: visible;
-      }
-
-      #printable-invoice {
-        position: relative !important;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        background: white;
-        border: 1px solid #000 !important;
-        box-sizing: border-box !important;
-      }
-
-      /* Tally specific strict borders */
-      .tally-border { border: 1px solid #000 !important; }
-      .tally-border-b { border-bottom: 1px solid #000 !important; }
-      .tally-border-t { border-top: 1px solid #000 !important; }
-      .tally-border-r { border-right: 1px solid #000 !important; }
-      .tally-border-l { border-left: 1px solid #000 !important; }
-
-      /* Force exact colors for printing */
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-
-    // --- Inline SVGs replacing external Lucide icons ---
-    const Plus = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
-    const Trash2 = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
-    const Printer = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
-    const SaveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>;
-    const Settings = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
-    const CheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
-    const AlertCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
-
-    // --- Indian Number to Words Converter ---
-    function numberToWords(price) {
-      const sglDigit = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-      const dblDigit = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-      const tensPlace = ["", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-      
-      if (price.toString().length > 9) return "Amount too large";
-      if (price === 0) return "Zero Only";
-
-      const numString = price.toString().padStart(9, '0');
-      const crores = parseInt(numString.substring(0, 2), 10);
-      const lakhs = parseInt(numString.substring(2, 4), 10);
-      const thousands = parseInt(numString.substring(4, 6), 10);
-      const hundreds = parseInt(numString.substring(6, 7), 10);
-      const tensAndOnes = parseInt(numString.substring(7, 9), 10);
-
-      let words = "";
-
-      const processTwoDigits = (num, suffix) => {
-        if (num > 0) {
-          if (num < 10) words += sglDigit[num] + " " + suffix + " ";
-          else if (num < 20) words += dblDigit[num - 10] + " " + suffix + " ";
-          else {
-            words += tensPlace[Math.floor(num / 10)] + " ";
-            if (num % 10 > 0) words += sglDigit[num % 10] + " ";
-            words += suffix + " ";
-          }
-        }
-      };
-
-      processTwoDigits(crores, "Crore");
-      processTwoDigits(lakhs, "Lakh");
-      processTwoDigits(thousands, "Thousand");
-
-      if (hundreds > 0) words += sglDigit[hundreds] + " Hundred ";
-
-      if (tensAndOnes > 0) {
-        if (words !== "") words += "and ";
-        if (tensAndOnes < 10) words += sglDigit[tensAndOnes] + " ";
-        else if (tensAndOnes < 20) words += dblDigit[tensAndOnes - 10] + " ";
-        else {
-          words += tensPlace[Math.floor(tensAndOnes / 10)] + " ";
-          if (tensAndOnes % 10 > 0) words += sglDigit[tensAndOnes % 10] + " ";
-        }
-      }
-
-      return words.trim() + " Only";
-    }
-
-    // --- Main App Component ---
-    function App() {
-      const [company] = useState({
-        name: 'G.M.ENTERPRISES',
-        address: 'Byculla(W)',
-        gstin: '27AAAAA00000001',
-        state: 'Maharashtra',
-        stateCode: '27'
-      });
-
-      const [buyer, setBuyer] = useState({
-        name: 'CUSTOMER NAME',
-        address: '456 Buyer Street, Market\nCity, State - 400002',
-        gstin: '27BBBBB0000B1Z5',
-        state: 'Maharashtra',
-        stateCode: '27'
-      });
-
-      const [invoiceMeta, setInvoiceMeta] = useState({
-        invoiceNo: 'INV/26-27/001',
-        date: new Date().toISOString().split('T')[0],
-        poNo: '',
-        vehicleNo: ''
-      });
-
-      const [savedBuyers, setSavedBuyers] = useState([
-        { name: 'Hardik', address: 'Mumbai Central', gstin: '27AAAAA0000A1Z6', state: 'Maharashtra', stateCode: '27' },
-        { name: 'V L Astra', address: 'Thane', gstin: '27AAAAA0000A1Z7', state: 'Maharashtra', stateCode: '27' }
-      ]);
-
-      const [items, setItems] = useState([
-        { id: 1, desc: 'Consulting Services', hsn: '9983', qty: 1, rate: 5000, per: 'Nos', amount: 5000 }
-      ]);
-
-      const [taxes, setTaxes] = useState({ cgst: 9, sgst: 9, igst: 0 });
-      const [googleScriptUrl, setGoogleScriptUrl] = useState('');
-      
-      const [isSaving, setIsSaving] = useState(false);
-      const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-      const [showSettings, setShowSettings] = useState(false);
-
-      const subTotal = items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-      const cgstAmt = subTotal * (taxes.cgst / 100);
-      const sgstAmt = subTotal * (taxes.sgst / 100);
-      const igstAmt = subTotal * (taxes.igst / 100);
-      const grandTotal = Math.round(subTotal + cgstAmt + sgstAmt + igstAmt);
-
-      const showToast = (message, type = 'success') => {
-        setToast({ show: true, message, type });
-        setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 5000);
-      };
-
-      const handleBuyerNameChange = (e) => {
-        const newName = e.target.value;
-        const existingBuyer = savedBuyers.find(b => b.name === newName);
-        
-        if (existingBuyer) {
-          setBuyer({ 
-            ...buyer, 
-            name: newName, 
-            address: existingBuyer.address || '', 
-            gstin: existingBuyer.gstin || '',
-            state: existingBuyer.state || buyer.state,
-            stateCode: existingBuyer.stateCode || buyer.stateCode
-          });
-        } else {
-          setBuyer({ ...buyer, name: newName });
-        }
-      };
-
-      const handleSaveBuyer = async () => {
-        if (!buyer.name.trim()) {
-          showToast('Please enter a buyer name', 'error');
-          return;
-        }
-        const existingIndex = savedBuyers.findIndex(b => b.name === buyer.name);
-        if (existingIndex >= 0) {
-          const updated = [...savedBuyers];
-          updated[existingIndex] = buyer;
-          setSavedBuyers(updated);
-          showToast('Buyer details updated!');
-        } else {
-          setSavedBuyers([...savedBuyers, buyer]);
-          showToast('New buyer saved to list!');
-        }
-
-        // Send buyer to Google Sheets
-        if (googleScriptUrl) {
-          const payload = { action: 'addBuyer', data: buyer };
-          try {
-            await fetch(googleScriptUrl, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'text/plain' },
-              body: JSON.stringify(payload)
-            });
-          } catch (error) {
-            console.error("Error saving buyer to sheets:", error);
-          }
-        }
-      };
-
-      const handleAddItem = () => {
-        setItems([...items, { id: Date.now(), desc: '', hsn: '', qty: 1, rate: 0, per: 'Nos', amount: 0 }]);
-      };
-
-      const handleRemoveItem = (id) => {
-        setItems(items.filter(item => item.id !== id));
-      };
-
-      const handleItemChange = (id, field, value) => {
-        setItems(items.map(item => {
-          if (item.id === id) {
-            const updated = { ...item, [field]: value };
-            if (field === 'qty' || field === 'rate') {
-              updated.amount = parseFloat(updated.qty || 0) * parseFloat(updated.rate || 0);
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>G.M. Enterprises - Invoice App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* --- CSS FOR PRINTING --- */
+        @media print {
+            body * { visibility: hidden; }
+            #printable-invoice, #printable-invoice * { visibility: visible; }
+            #printable-invoice {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: white;
             }
-            return updated;
-          }
-          return item;
-        }));
-      };
-
-      const handlePrint = () => {
-        window.print();
-      };
-
-      const handleSaveToSheets = async () => {
-        if (!googleScriptUrl) {
-          showToast('Please set your Google Apps Script URL in Settings first.', 'error');
-          setShowSettings(true);
-          return;
+            @page { margin: 12mm; }
+            .tally-border { border: 1px solid #000 !important; }
+            .tally-border-b { border-bottom: 1px solid #000 !important; }
+            .tally-border-t { border-top: 1px solid #000 !important; }
+            .tally-border-r { border-right: 1px solid #000 !important; }
+            .tally-border-l { border-left: 1px solid #000 !important; }
+            
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
 
-        setIsSaving(true);
+        /* Custom Scrollbar for form section */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans h-screen flex flex-col lg:flex-row overflow-hidden">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- --- LEFT SIDE: FORM CONTROLS (Hidden on Print) --- -->
+    <div class="w-full lg:w-1/2 p-6 overflow-y-auto custom-scrollbar print:hidden border-r border-gray-300 h-full">
         
-        const payload = {
-          action: 'addInvoice',
-          data: {
-            invoiceNo: invoiceMeta.invoiceNo,
-            date: invoiceMeta.date,
-            companyName: company.name,
-            buyerName: buyer.name,
-            subTotal: subTotal,
-            taxAmount: cgstAmt + sgstAmt + igstAmt,
-            grandTotal: grandTotal,
-            itemsSummary: items.map(i => `${i.desc} (${i.qty})`).join(', ')
-          }
-        };
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">G.M. Enterprises</h1>
+                <p class="text-xs text-gray-500 mt-1">Invoice Management and Automated Ledger Sync</p>
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button onclick="handleSaveToSheets()" id="btn-save" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    <span id="btn-save-text">Save to Sheets</span>
+                </button>
+                <button onclick="window.print()" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                    Print / PDF
+                </button>
+            </div>
+        </div>
 
-        try {
-          await fetch(googleScriptUrl, {
-            method: 'POST',
-            mode: 'no-cors', 
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(payload)
-          });
-          showToast('Invoice data sent to Google Sheets successfully!');
-        } catch (error) {
-          console.error(error);
-          showToast('Failed to connect to Google Sheets. Check your URL.', 'error');
-        } finally {
-          setIsSaving(false);
-        }
-      };
-
-      return (
-        <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row font-sans">
-          {/* --- LEFT SIDE: FORM CONTROLS --- */}
-          <div className="w-full md:w-1/2 p-6 overflow-y-auto print:hidden border-r border-gray-300">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-800">Invoice Generator</h1>
-              <div className="flex gap-2">
-                 <button 
-                  onClick={() => setShowSettings(!showSettings)}
-                  className="p-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors flex items-center justify-center"
-                  title="Settings"
-                >
-                  <Settings />
-                </button>
-                <button 
-                  onClick={handleSaveToSheets}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
-                  <SaveIcon />
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-                <button 
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                >
-                  <Printer />
-                  Print
-                </button>
-              </div>
+        <div class="space-y-6">
+            <!-- Company Details Form (Read Only) -->
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center border-b pb-2 mb-4">
+                    <h2 class="font-semibold text-lg text-gray-700">Company Details</h2>
+                    <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">Hardcoded</span>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold uppercase text-gray-500">Company Name</label>
+                        <input type="text" value="G.M.ENTERPRISES" readonly class="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600 font-medium cursor-not-allowed border-gray-300" />
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold uppercase text-gray-500">Address</label>
+                        <textarea readonly class="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600 font-medium cursor-not-allowed border-gray-300" rows="2">Byculla(W)</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-500">GSTIN</label>
+                        <input type="text" value="27AAAAA00000001" readonly class="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600 font-medium cursor-not-allowed border-gray-300 font-mono" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-500">State</label>
+                        <input type="text" value="Maharashtra" readonly class="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-600 font-medium cursor-not-allowed border-gray-300" />
+                    </div>
+                </div>
             </div>
 
-            {toast.show && (
-              <div className={`mb-4 p-4 rounded flex items-center gap-3 text-white ${toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
-                {toast.type === 'success' ? <CheckCircle /> : <AlertCircle />}
-                <span>{toast.message}</span>
-              </div>
-            )}
-
-            {showSettings && (
-              <div className="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-                <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">Google Sheets Integration</h3>
-                <label className="block text-sm text-gray-600 mb-1">Google Apps Script Web App URL</label>
-                <input 
-                  type="text" 
-                  value={googleScriptUrl}
-                  onChange={(e) => setGoogleScriptUrl(e.target.value)}
-                  placeholder="https://script.google.com/macros/s/AKfycbxh_LQDrjhpkoQ9Mu6LnlPD_fwvpdQwQ095dUwsjpn7vgEgGDOEr--1Bxw4kCpda75A/exec" 
-                  className="w-full border border-gray-300 p-2 rounded focus:border-blue-500 focus:outline-none"
-                />
-                <p className="text-xs text-gray-500 mt-2">Paste the URL obtained after deploying your Google Apps Script.</p>
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {/* Company Details */}
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h2 className="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Company Details</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <label className="block text-sm text-gray-600">Company Name</label>
-                    <input type="text" value={company.name} readOnly className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-500 cursor-not-allowed font-medium" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-sm text-gray-600">Address</label>
-                    <textarea value={company.address} readOnly className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-500 cursor-not-allowed font-medium" rows="2" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">GSTIN</label>
-                    <input type="text" value={company.gstin} readOnly className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-500 cursor-not-allowed font-medium" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">State</label>
-                    <input type="text" value={company.state} readOnly className="w-full border p-2 rounded mt-1 bg-gray-100 text-gray-500 cursor-not-allowed font-medium" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Invoice Meta & Buyer */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                  <h2 className="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Invoice Info</h2>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm text-gray-600">Invoice No.</label>
-                      <input type="text" value={invoiceMeta.invoiceNo} onChange={e => setInvoiceMeta({...invoiceMeta, invoiceNo: e.target.value})} className="w-full border p-2 rounded mt-1" />
+            <!-- Invoice Meta & Buyer -->
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                    <h2 class="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Invoice Info</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm text-gray-600">Invoice No. <span class="text-red-500 font-bold">*</span></label>
+                            <input type="text" id="inv-no" oninput="updateInvoiceMeta('invoiceNo', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-bold text-gray-700" placeholder="e.g. INV/26-27/001" />
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Date</label>
+                            <input type="date" id="inv-date" onchange="updateInvoiceMeta('date', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" />
+                        </div>
                     </div>
-                    <div>
-                      <label className="block text-sm text-gray-600">Date</label>
-                      <input type="date" value={invoiceMeta.date} onChange={e => setInvoiceMeta({...invoiceMeta, date: e.target.value})} className="w-full border p-2 rounded mt-1" />
-                    </div>
-                  </div>
                 </div>
 
-                <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-center border-b pb-2 mb-4">
-                    <h2 className="font-semibold text-lg text-gray-700">Buyer (Billed To)</h2>
-                    <button onClick={handleSaveBuyer} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100" title="Save to list">
-                      <SaveIcon /> Save
+                <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-center border-b pb-2 mb-4">
+                        <h2 class="font-semibold text-lg text-gray-700">Buyer (Billed To)</h2>
+                        <button onclick="handleSaveBuyer()" class="flex items-center gap-1 text-xs bg-green-50 text-green-700 px-3 py-1 rounded-md border border-green-200 hover:bg-green-100 font-semibold" title="Upload / Sync this buyer to Google Sheet Database">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                            Save Buyer
+                        </button>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm text-gray-600">Buyer Name</label>
+                            <input list="saved-buyers-list" type="text" id="buyer-name" oninput="onBuyerNameChange(this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" placeholder="Search or add buyer..." />
+                            <datalist id="saved-buyers-list"></datalist>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Address</label>
+                            <textarea id="buyer-address" oninput="updateBuyer('address', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" rows="2"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">GSTIN</label>
+                            <input type="text" id="buyer-gstin" oninput="updateBuyer('gstin', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-mono" placeholder="27BBBBB0000B1Z5" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items Table Form -->
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center border-b pb-2 mb-4">
+                    <h2 class="font-semibold text-lg text-gray-700">Items</h2>
+                    <button onclick="handleAddItem()" class="flex items-center gap-1 text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 border border-blue-200 font-semibold">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Add Item
                     </button>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm text-gray-600">Buyer Name</label>
-                      <input 
-                        list="saved-buyers-list"
-                        type="text" 
-                        value={buyer.name} 
-                        onChange={handleBuyerNameChange} 
-                        className="w-full border p-2 rounded mt-1" 
-                        placeholder="Select or type new..."
-                      />
-                      <datalist id="saved-buyers-list">
-                        {savedBuyers.map((b, i) => (
-                          <option key={i} value={b.name} />
-                        ))}
-                      </datalist>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600">Address</label>
-                      <textarea value={buyer.address} onChange={e => setBuyer({...buyer, address: e.target.value})} className="w-full border p-2 rounded mt-1" rows="2" />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600">GSTIN</label>
-                      <input type="text" value={buyer.gstin} onChange={e => setBuyer({...buyer, gstin: e.target.value})} className="w-full border p-2 rounded mt-1" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Items */}
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <div className="flex justify-between items-center border-b pb-2 mb-4">
-                  <h2 className="font-semibold text-lg text-gray-700">Items</h2>
-                  <button onClick={handleAddItem} className="flex items-center gap-1 text-sm bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100">
-                    <Plus /> Add Item
-                  </button>
                 </div>
                 
-                <div className="space-y-3">
-                  {items.map((item, index) => (
-                    <div key={item.id} className="flex gap-2 items-start bg-gray-50 p-3 rounded border">
-                      <div className="grid grid-cols-12 gap-2 w-full">
-                        <div className="col-span-4">
-                          <label className="text-xs text-gray-500">Description</label>
-                          <input type="text" value={item.desc} onChange={e => handleItemChange(item.id, 'desc', e.target.value)} className="w-full border p-1 rounded text-sm" />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-gray-500">HSN/SAC</label>
-                          <input type="text" value={item.hsn} onChange={e => handleItemChange(item.id, 'hsn', e.target.value)} className="w-full border p-1 rounded text-sm" />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-gray-500">Qty</label>
-                          <input type="number" value={item.qty} onChange={e => handleItemChange(item.id, 'qty', e.target.value)} className="w-full border p-1 rounded text-sm" />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-gray-500">Rate</label>
-                          <input type="number" value={item.rate} onChange={e => handleItemChange(item.id, 'rate', e.target.value)} className="w-full border p-1 rounded text-sm" />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-xs text-gray-500">Amount</label>
-                          <input type="text" value={item.amount} readOnly className="w-full border p-1 rounded text-sm bg-gray-200" />
-                        </div>
-                      </div>
-                      <button onClick={() => handleRemoveItem(item.id)} className="mt-5 text-red-500 hover:text-red-700 p-1 flex items-center justify-center">
-                        <Trash2 />
-                      </button>
-                    </div>
-                  ))}
+                <div id="items-list-form" class="space-y-3">
+                    <!-- Items injected here by JS -->
                 </div>
-              </div>
-
-              {/* Taxes */}
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200 mb-10">
-                <h2 className="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Taxes (%)</h2>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-600">CGST %</label>
-                    <input type="number" value={taxes.cgst} onChange={e => setTaxes({...taxes, cgst: parseFloat(e.target.value) || 0})} className="w-full border p-2 rounded mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">SGST %</label>
-                    <input type="number" value={taxes.sgst} onChange={e => setTaxes({...taxes, sgst: parseFloat(e.target.value) || 0})} className="w-full border p-2 rounded mt-1" />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600">IGST %</label>
-                    <input type="number" value={taxes.igst} onChange={e => setTaxes({...taxes, igst: parseFloat(e.target.value) || 0})} className="w-full border p-2 rounded mt-1" />
-                  </div>
-                </div>
-              </div>
             </div>
-          </div>
 
-
-          {/* --- RIGHT SIDE: TALLY INVOICE PREVIEW --- */}
-          <div className="w-full md:w-1/2 p-6 bg-gray-200 flex justify-center overflow-y-auto">
-            <div id="printable-invoice" className="bg-white shadow-lg p-8 w-[210mm] min-h-[297mm] text-[11px] leading-tight text-black font-sans tally-border box-border">
-              <div className="text-center font-bold text-lg mb-2 underline tracking-wider">
-                TAX INVOICE
-              </div>
-
-              <div className="flex border border-black h-[140px]">
-                <div className="w-1/2 border-r border-black p-2 flex flex-col justify-between">
-                  <div>
-                    <div className="font-bold text-sm uppercase">{company.name}</div>
-                    <div className="whitespace-pre-line mt-1">{company.address}</div>
-                    <div className="mt-2"><span className="font-bold">GSTIN/UIN: </span> {company.gstin}</div>
-                    <div><span className="font-bold">State Name: </span> {company.state}, <span className="font-bold">Code:</span> {company.stateCode}</div>
-                  </div>
+            <!-- Taxes -->
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200 mb-10">
+                <h2 class="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Taxes (%)</h2>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-600 font-medium">CGST %</label>
+                        <input type="number" id="tax-cgst" oninput="updateTaxes('cgst', this.value)" class="w-full border p-2 rounded mt-1" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600 font-medium">SGST %</label>
+                        <input type="number" id="tax-sgst" oninput="updateTaxes('sgst', this.value)" class="w-full border p-2 rounded mt-1" />
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600 font-medium">IGST %</label>
+                        <input type="number" id="tax-igst" oninput="updateTaxes('igst', this.value)" class="w-full border p-2 rounded mt-1" />
+                    </div>
                 </div>
-                <div className="w-1/2 flex flex-col">
-                  <div className="flex border-b border-black flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Invoice No.</div>
-                      <div className="font-semibold">{invoiceMeta.invoiceNo}</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Dated</div>
-                      <div className="font-semibold">{invoiceMeta.date}</div>
-                    </div>
-                  </div>
-                  <div className="flex border-b border-black flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Delivery Note</div><div>-</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Mode/Terms of Payment</div><div>-</div>
-                    </div>
-                  </div>
-                  <div className="flex border-b border-black flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Supplier's Ref.</div><div>-</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Other Reference(s)</div><div>-</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex border-b border-l border-r border-black h-[110px]">
-                <div className="w-1/2 border-r border-black p-2 flex flex-col justify-between">
-                  <div>
-                    <div className="font-bold">Buyer (Bill to)</div>
-                    <div className="font-bold text-sm uppercase mt-1">{buyer.name}</div>
-                    <div className="whitespace-pre-line mt-1">{buyer.address}</div>
-                    <div className="mt-2"><span className="font-bold">GSTIN/UIN: </span> {buyer.gstin}</div>
-                    <div><span className="font-bold">State Name: </span> {buyer.state}, <span className="font-bold">Code:</span> {buyer.stateCode}</div>
-                  </div>
-                </div>
-                <div className="w-1/2 flex flex-col">
-                  <div className="flex border-b border-black flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Buyer's Order No.</div><div>{invoiceMeta.poNo || '-'}</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Dated</div><div>-</div>
-                    </div>
-                  </div>
-                  <div className="flex border-b border-black flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Despatch Document No.</div><div>-</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Delivery Note Date</div><div>-</div>
-                    </div>
-                  </div>
-                  <div className="flex flex-1">
-                    <div className="w-1/2 border-r border-black p-1 pl-2">
-                      <div className="font-bold">Despatched through</div><div>-</div>
-                    </div>
-                    <div className="w-1/2 p-1 pl-2">
-                      <div className="font-bold">Destination</div><div>-</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-b border-l border-r border-black min-h-[300px] flex flex-col">
-                <div className="flex border-b border-black font-bold text-center">
-                  <div className="w-[8%] border-r border-black p-1">Sl No.</div>
-                  <div className="w-[42%] border-r border-black p-1 text-left pl-2">Description of Goods</div>
-                  <div className="w-[12%] border-r border-black p-1">HSN/SAC</div>
-                  <div className="w-[10%] border-r border-black p-1">Quantity</div>
-                  <div className="w-[10%] border-r border-black p-1">Rate</div>
-                  <div className="w-[6%] border-r border-black p-1">per</div>
-                  <div className="w-[12%] p-1">Amount</div>
-                </div>
-
-                <div className="flex flex-1 relative">
-                  <div className="w-[8%] border-r border-black p-1 pt-2 text-center absolute top-0 bottom-0 left-0"></div>
-                  <div className="w-[42%] border-r border-black p-1 pt-2 absolute top-0 bottom-0 left-[8%]"></div>
-                  <div className="w-[12%] border-r border-black p-1 pt-2 absolute top-0 bottom-0 left-[50%]"></div>
-                  <div className="w-[10%] border-r border-black p-1 pt-2 absolute top-0 bottom-0 left-[62%]"></div>
-                  <div className="w-[10%] border-r border-black p-1 pt-2 absolute top-0 bottom-0 left-[72%]"></div>
-                  <div className="w-[6%] border-r border-black p-1 pt-2 absolute top-0 bottom-0 left-[82%]"></div>
-                  
-                  <div className="w-full z-10">
-                    {items.map((item, idx) => (
-                      <div key={item.id} className="flex">
-                        <div className="w-[8%] p-1 text-center">{idx + 1}</div>
-                        <div className="w-[42%] p-1 pl-2 font-bold">{item.desc}</div>
-                        <div className="w-[12%] p-1 text-center">{item.hsn}</div>
-                        <div className="w-[10%] p-1 text-right pr-2"><b>{item.qty}</b> {item.per}</div>
-                        <div className="w-[10%] p-1 text-right pr-2">{parseFloat(item.rate).toFixed(2)}</div>
-                        <div className="w-[6%] p-1 text-center">{item.per}</div>
-                        <div className="w-[12%] p-1 text-right font-bold pr-2">{parseFloat(item.amount).toFixed(2)}</div>
-                      </div>
-                    ))}
-
-                    <div className="flex mt-4">
-                      <div className="w-[8%] p-1"></div><div className="w-[42%] p-1 pl-2 text-right italic">CGST</div>
-                      <div className="w-[12%] p-1"></div><div className="w-[10%] p-1 text-right pr-2">{taxes.cgst}%</div>
-                      <div className="w-[10%] p-1"></div><div className="w-[6%] p-1"></div>
-                      <div className="w-[12%] p-1 text-right pr-2">{cgstAmt.toFixed(2)}</div>
-                    </div>
-                    <div className="flex">
-                      <div className="w-[8%] p-1"></div><div className="w-[42%] p-1 pl-2 text-right italic">SGST</div>
-                      <div className="w-[12%] p-1"></div><div className="w-[10%] p-1 text-right pr-2">{taxes.sgst}%</div>
-                      <div className="w-[10%] p-1"></div><div className="w-[6%] p-1"></div>
-                      <div className="w-[12%] p-1 text-right pr-2">{sgstAmt.toFixed(2)}</div>
-                    </div>
-                    {igstAmt > 0 && (
-                      <div className="flex">
-                        <div className="w-[8%] p-1"></div><div className="w-[42%] p-1 pl-2 text-right italic">IGST</div>
-                        <div className="w-[12%] p-1"></div><div className="w-[10%] p-1 text-right pr-2">{taxes.igst}%</div>
-                        <div className="w-[10%] p-1"></div><div className="w-[6%] p-1"></div>
-                        <div className="w-[12%] p-1 text-right pr-2">{igstAmt.toFixed(2)}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex border-t border-black font-bold">
-                  <div className="w-[50%] p-1 text-right pr-2">Total</div>
-                  <div className="w-[12%] p-1"></div><div className="w-[10%] p-1"></div>
-                  <div className="w-[10%] p-1"></div><div className="w-[6%] p-1"></div>
-                  <div className="w-[12%] p-1 text-right pr-2 border-l border-black">₹ {grandTotal.toFixed(2)}</div>
-                </div>
-              </div>
-
-              <div className="border-b border-l border-r border-black p-2">
-                <div className="font-bold">Amount Chargeable (in words)</div>
-                <div className="font-semibold text-[12px] mt-1">INR {numberToWords(grandTotal)}</div>
-              </div>
-
-              <div className="border-b border-l border-r border-black flex">
-                <div className="w-1/2 border-r border-black p-2">
-                  <div className="font-bold underline mb-1">Declaration</div>
-                  <div className="text-justify">
-                    We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                  </div>
-                </div>
-                <div className="w-1/2 p-2 relative flex flex-col justify-between">
-                  <div className="text-right font-bold">for {company.name}</div>
-                  <div className="text-right font-bold mt-16 pb-1">Authorised Signatory</div>
-                </div>
-              </div>
-              
-              <div className="text-center mt-1 text-[9px]">SUBJECT TO {company.state.toUpperCase()} JURISDICTION</div>
-              <div className="text-center mt-1 text-[9px]">This is a Computer Generated Invoice</div>
             </div>
-          </div>
         </div>
-      );
-    }
+    </div>
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+
+    <!-- --- RIGHT SIDE: TALLY INVOICE PREVIEW --- -->
+    <div class="w-full lg:w-1/2 p-6 bg-gray-200 flex justify-center items-start overflow-y-auto h-full">
+        
+        <!-- Printable Template (A4 proportions) -->
+        <div id="printable-invoice" class="bg-white shadow-xl p-8 w-[210mm] min-h-[297mm] text-[11px] leading-tight text-black font-sans tally-border box-border relative">
+            
+            <div class="text-center font-bold text-lg mb-2 underline tracking-wider">
+                TAX INVOICE
+            </div>
+
+            <!-- Top Company Block -->
+            <div class="flex border border-black h-[135px]">
+                <div class="w-1/2 border-r border-black p-2 flex flex-col justify-between">
+                    <div>
+                        <div class="font-bold text-sm uppercase">G.M.ENTERPRISES</div>
+                        <div class="mt-1 font-medium">Byculla(W)</div>
+                        <div class="mt-4">
+                            <span class="font-bold">GSTIN/UIN: </span> 27AAAAA00000001
+                        </div>
+                        <div>
+                            <span class="font-bold">State Name: </span> Maharashtra, <span class="font-bold">Code:</span> 27
+                        </div>
+                    </div>
+                </div>
+
+                <div class="w-1/2 flex flex-col">
+                    <div class="flex border-b border-black flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2">
+                            <div class="font-bold">Invoice No.</div>
+                            <div id="prev-inv-no" class="font-bold text-xs"></div>
+                        </div>
+                        <div class="w-1/2 p-1 pl-2">
+                            <div class="font-bold">Dated</div>
+                            <div id="prev-inv-date" class="font-semibold"></div>
+                        </div>
+                    </div>
+                    <div class="flex border-b border-black flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Delivery Note</div><div>-</div></div>
+                        <div class="w-1/2 p-1 pl-2"><div class="font-bold">Mode/Terms of Payment</div><div>-</div></div>
+                    </div>
+                    <div class="flex border-b border-black flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Supplier's Ref.</div><div>-</div></div>
+                        <div class="w-1/2 p-1 pl-2"><div class="font-bold">Other Reference(s)</div><div>-</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buyer Section -->
+            <div class="flex border-b border-l border-r border-black h-[115px]">
+                <div class="w-1/2 border-r border-black p-2 flex flex-col justify-between">
+                    <div>
+                        <div class="font-bold text-[9px] uppercase tracking-wide text-gray-500">Buyer (Bill to)</div>
+                        <div id="prev-buyer-name" class="font-bold text-sm uppercase mt-1"></div>
+                        <div id="prev-buyer-address" class="mt-1"></div>
+                        <div class="mt-3">
+                            <span class="font-bold">GSTIN/UIN: </span> <span id="prev-buyer-gstin"></span>
+                        </div>
+                        <div>
+                            <span class="font-bold">State Name: </span> Maharashtra, <span class="font-bold">Code:</span> 27
+                        </div>
+                    </div>
+                </div>
+                <div class="w-1/2 flex flex-col">
+                    <div class="flex border-b border-black flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Buyer's Order No.</div><div>-</div></div>
+                        <div class="w-1/2 p-1 pl-2"><div class="font-bold">Dated</div><div>-</div></div>
+                    </div>
+                    <div class="flex border-b border-black flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Despatch Document No.</div><div>-</div></div>
+                        <div class="w-1/2 p-1 pl-2"><div class="font-bold">Delivery Note Date</div><div>-</div></div>
+                    </div>
+                    <div class="flex flex-1">
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Despatched through</div><div>-</div></div>
+                        <div class="w-1/2 p-1 pl-2"><div class="font-bold">Destination</div><div>-</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <div class="border-b border-l border-r border-black min-h-[350px] flex flex-col relative">
+                <!-- Background Column Lines -->
+                <div class="absolute top-0 bottom-0 left-0 w-full flex pointer-events-none">
+                    <div class="w-[8%] border-r border-black h-full"></div>
+                    <div class="w-[42%] border-r border-black h-full"></div>
+                    <div class="w-[12%] border-r border-black h-full"></div>
+                    <div class="w-[10%] border-r border-black h-full"></div>
+                    <div class="w-[10%] border-r border-black h-full"></div>
+                    <div class="w-[6%] border-r border-black h-full"></div>
+                    <div class="w-[12%] h-full"></div>
+                </div>
+
+                <!-- Table Header -->
+                <div class="flex border-b border-black font-bold text-center z-10 bg-white">
+                    <div class="w-[8%] border-r border-black p-1">Sl No.</div>
+                    <div class="w-[42%] border-r border-black p-1 text-left pl-2">Description of Goods</div>
+                    <div class="w-[12%] border-r border-black p-1">HSN/SAC</div>
+                    <div class="w-[10%] border-r border-black p-1">Quantity</div>
+                    <div class="w-[10%] border-r border-black p-1">Rate</div>
+                    <div class="w-[6%] border-r border-black p-1">per</div>
+                    <div class="w-[12%] p-1">Amount</div>
+                </div>
+
+                <!-- Table Body Content -->
+                <div id="prev-items-body" class="flex-1 z-10 pt-2">
+                    <!-- Items injected here by JS -->
+                </div>
+            </div>
+
+            <!-- Total Row -->
+            <div class="flex border-b border-l border-r border-black font-bold z-10 bg-white">
+                <div class="w-[50%] p-1 text-right pr-2">Total</div>
+                <div class="w-[12%] p-1 text-center"></div>
+                <div class="w-[10%] p-1 text-right pr-2"></div>
+                <div class="w-[10%] p-1 text-right pr-2"></div>
+                <div class="w-[6%] p-1 text-center"></div>
+                <div id="prev-grand-total" class="w-[12%] p-1 text-right pr-2 border-l border-black"></div>
+            </div>
+
+            <!-- Amount in Words -->
+            <div class="border-b border-l border-r border-black p-2">
+                <div class="font-bold text-[10px] uppercase text-gray-500">Amount Chargeable (in words)</div>
+                <div id="prev-amount-words" class="font-bold text-[12px] mt-1"></div>
+            </div>
+
+            <!-- Declaration and Signature -->
+            <div class="border-b border-l border-r border-black flex">
+                <div class="w-1/2 border-r border-black p-2">
+                    <div class="font-bold underline mb-1">Declaration</div>
+                    <div class="text-justify text-[10px] leading-relaxed text-gray-700">
+                        We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
+                    </div>
+                </div>
+                <div class="w-1/2 p-2 relative flex flex-col justify-between">
+                    <div class="text-right font-bold text-[10px]">for G.M.ENTERPRISES</div>
+                    <div class="text-right font-bold mt-14 pb-1">Authorised Signatory</div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-2 text-[9px] font-semibold text-gray-600">SUBJECT TO MAHARASHTRA JURISDICTION</div>
+            <div class="text-center text-[9px] text-gray-500">This is a Computer Generated Invoice</div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // Hardcoded Google Apps Script Web App URL
+        const googleScriptUrl = "https://script.google.com/macros/s/AKfycbxh_LQDrjhpkoQ9Mu6LnlPD_fwvpdQwQ095dUwsjpn7vgEgGDOEr--1Bxw4kCpda75A/exec";
+
+        // Global State
+        const state = {
+            company: { name: 'G.M.ENTERPRISES', address: 'Byculla(W)', gstin: '27AAAAA00000001', state: 'Maharashtra', stateCode: '27' },
+            buyer: { name: '', address: '', gstin: '', state: 'Maharashtra', stateCode: '27' },
+            invoiceMeta: { invoiceNo: 'INV/26-27/001', date: new Date().toISOString().split('T')[0] },
+            savedBuyers: [
+                { name: 'Hardik', address: 'Mumbai Central', gstin: '27AAAAA0000A1Z6', state: 'Maharashtra', stateCode: '27' },
+                { name: 'V L Astra', address: 'Thane', gstin: '27AAAAA0000A1Z7', state: 'Maharashtra', stateCode: '27' }
+            ],
+            items: [
+                { id: Date.now(), desc: 'Consulting Services', hsn: '9983', qty: 1, rate: 5000, per: 'Nos', amount: 5000 }
+            ],
+            taxes: { cgst: 9, sgst: 9, igst: 0 },
+            isSaving: false
+        };
+
+        // --- Number to words logic ---
+        function numberToWords(price) {
+            const sglDigit = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+            const dblDigit = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+            const tensPlace = ["", "Ten", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+            
+            if (price.toString().length > 9) return "Amount too large";
+            if (price === 0) return "Zero Only";
+
+            const numString = price.toString().padStart(9, '0');
+            const crores = parseInt(numString.substring(0, 2), 10);
+            const lakhs = parseInt(numString.substring(2, 4), 10);
+            const thousands = parseInt(numString.substring(4, 6), 10);
+            const hundreds = parseInt(numString.substring(6, 7), 10);
+            const tensAndOnes = parseInt(numString.substring(7, 9), 10);
+
+            let words = "";
+            const processTwoDigits = (num, suffix) => {
+                if (num > 0) {
+                    if (num < 10) words += sglDigit[num] + " " + suffix + " ";
+                    else if (num < 20) words += dblDigit[num - 10] + " " + suffix + " ";
+                    else {
+                        words += tensPlace[Math.floor(num / 10)] + " ";
+                        if (num % 10 > 0) words += sglDigit[num % 10] + " ";
+                        words += suffix + " ";
+                    }
+                }
+            };
+
+            processTwoDigits(crores, "Crore");
+            processTwoDigits(lakhs, "Lakh");
+            processTwoDigits(thousands, "Thousand");
+            if (hundreds > 0) words += sglDigit[hundreds] + " Hundred ";
+            
+            if (tensAndOnes > 0) {
+                if (words !== "") words += "and ";
+                if (tensAndOnes < 10) words += sglDigit[tensAndOnes] + " ";
+                else if (tensAndOnes < 20) words += dblDigit[tensAndOnes - 10] + " ";
+                else {
+                    words += tensPlace[Math.floor(tensAndOnes / 10)] + " ";
+                    if (tensAndOnes % 10 > 0) words += sglDigit[tensAndOnes % 10] + " ";
+                }
+            }
+            return words.trim() + " Only";
+        }
+
+        // --- Toasts ---
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-lg flex items-center gap-3 text-white transition-all shadow-md transform translate-y-0 opacity-100 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            toast.innerHTML = type === 'success' 
+                ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> <span class="font-medium text-sm leading-snug">${message}</span>`
+                : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> <span class="font-medium text-sm leading-snug">${message}</span>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // --- Initialization and Binding ---
+        window.onload = () => {
+            // Set initial inputs
+            document.getElementById('inv-no').value = state.invoiceMeta.invoiceNo;
+            document.getElementById('inv-date').value = state.invoiceMeta.date;
+            document.getElementById('tax-cgst').value = state.taxes.cgst;
+            document.getElementById('tax-sgst').value = state.taxes.sgst;
+            document.getElementById('tax-igst').value = state.taxes.igst;
+
+            renderDatalist();
+            renderItemsForm();
+            updatePreview();
+        };
+
+        // Update Meta
+        function updateInvoiceMeta(field, value) {
+            state.invoiceMeta[field] = value;
+            updatePreview();
+        }
+
+        // Update Buyer
+        function updateBuyer(field, value) {
+            state.buyer[field] = value;
+            updatePreview();
+        }
+
+        function onBuyerNameChange(val) {
+            state.buyer.name = val;
+            const existing = state.savedBuyers.find(b => b.name === val);
+            if (existing) {
+                state.buyer.address = existing.address || '';
+                state.buyer.gstin = existing.gstin || '';
+                document.getElementById('buyer-address').value = state.buyer.address;
+                document.getElementById('buyer-gstin').value = state.buyer.gstin;
+            }
+            updatePreview();
+        }
+
+        // Update Taxes
+        function updateTaxes(field, value) {
+            state.taxes[field] = parseFloat(value) || 0;
+            updatePreview();
+        }
+
+        // Update Items
+        function renderItemsForm() {
+            const container = document.getElementById('items-list-form');
+            container.innerHTML = state.items.map(item => `
+                <div class="flex gap-2 items-start bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div class="grid grid-cols-12 gap-2 w-full">
+                        <div class="col-span-4">
+                            <label class="text-xs text-gray-500 font-bold">Description</label>
+                            <input type="text" value="${item.desc}" oninput="updateItem(${item.id}, 'desc', this.value)" class="w-full border p-1.5 rounded text-sm bg-white" />
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-500 font-bold">HSN/SAC</label>
+                            <input type="text" value="${item.hsn}" oninput="updateItem(${item.id}, 'hsn', this.value)" class="w-full border p-1.5 rounded text-sm bg-white font-mono" />
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-500 font-bold">Qty</label>
+                            <input type="number" value="${item.qty}" oninput="updateItem(${item.id}, 'qty', this.value)" class="w-full border p-1.5 rounded text-sm bg-white" />
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-500 font-bold">Rate</label>
+                            <input type="number" value="${item.rate}" oninput="updateItem(${item.id}, 'rate', this.value)" class="w-full border p-1.5 rounded text-sm bg-white" />
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-xs text-gray-500 font-bold">Amount</label>
+                            <input type="text" id="amount-${item.id}" value="${item.amount}" readonly class="w-full border p-1.5 rounded text-sm bg-gray-100 text-gray-600 font-medium" />
+                        </div>
+                    </div>
+                    <button onclick="handleRemoveItem(${item.id})" class="mt-5 text-red-500 hover:text-red-700 p-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateItem(id, field, value) {
+            const item = state.items.find(i => i.id === id);
+            item[field] = value;
+            if (field === 'qty' || field === 'rate') {
+                item.amount = parseFloat(item.qty || 0) * parseFloat(item.rate || 0);
+                document.getElementById(`amount-${id}`).value = item.amount;
+            }
+            updatePreview();
+        }
+
+        function handleAddItem() {
+            state.items.push({ id: Date.now(), desc: '', hsn: '', qty: 1, rate: 0, per: 'Nos', amount: 0 });
+            renderItemsForm();
+            updatePreview();
+        }
+
+        function handleRemoveItem(id) {
+            state.items = state.items.filter(i => i.id !== id);
+            renderItemsForm();
+            updatePreview();
+        }
+
+        // --- Render Buyers List ---
+        function renderDatalist() {
+            const dl = document.getElementById('saved-buyers-list');
+            dl.innerHTML = state.savedBuyers.map(b => `<option value="${b.name}">`).join('');
+        }
+
+        // --- API Calls ---
+        async function handleSaveBuyer() {
+            if (!state.buyer.name.trim()) {
+                showToast('Please enter a buyer name', 'error');
+                return;
+            }
+            const existingIndex = state.savedBuyers.findIndex(b => b.name === state.buyer.name);
+            if (existingIndex >= 0) {
+                state.savedBuyers[existingIndex] = { ...state.buyer };
+                showToast('Buyer details updated in local list!');
+            } else {
+                state.savedBuyers.push({ ...state.buyer });
+                showToast('New buyer saved locally!');
+            }
+            renderDatalist();
+
+            // Sync to Google Sheet
+            const payload = { action: 'addBuyer', data: state.buyer };
+            try {
+                await fetch(googleScriptUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                showToast('Buyer uploaded to Google Sheets Database!');
+            } catch (error) {
+                console.error("Error saving buyer:", error);
+            }
+        }
+
+        async function handleSaveToSheets() {
+            state.isSaving = true;
+            document.getElementById('btn-save').disabled = true;
+            document.getElementById('btn-save-text').innerText = "Checking / Saving...";
+            
+            const totals = calculateTotals();
+            const payload = {
+                action: 'addInvoice',
+                data: {
+                    invoiceNo: state.invoiceMeta.invoiceNo,
+                    date: state.invoiceMeta.date,
+                    companyName: state.company.name,
+                    buyerName: state.buyer.name,
+                    subTotal: totals.subTotal,
+                    taxAmount: totals.cgstAmt + totals.sgstAmt + totals.igstAmt,
+                    grandTotal: totals.grandTotal,
+                    items: state.items
+                }
+            };
+
+            try {
+                const response = await fetch(googleScriptUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.result === 'duplicate') {
+                    showToast(`Validation Failed: Invoice No "${state.invoiceMeta.invoiceNo}" already exists in the database!`, 'error');
+                } else if (result.result === 'success') {
+                    showToast('Invoice saved to Google Sheets successfully!', 'success');
+                } else {
+                    showToast('Error saving: ' + (result.message || 'Unknown response'), 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast('Database connection failed. Please check internet access or Apps Script deployment.', 'error');
+            } finally {
+                state.isSaving = false;
+                document.getElementById('btn-save').disabled = false;
+                document.getElementById('btn-save-text').innerText = "Save to Sheets";
+            }
+        }
+
+        // --- Core Preview Calculation ---
+        function calculateTotals() {
+            let subTotal = state.items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+            let cgstAmt = subTotal * (state.taxes.cgst / 100);
+            let sgstAmt = subTotal * (state.taxes.sgst / 100);
+            let igstAmt = subTotal * (state.taxes.igst / 100);
+            let grandTotal = Math.round(subTotal + cgstAmt + sgstAmt + igstAmt);
+            return { subTotal, cgstAmt, sgstAmt, igstAmt, grandTotal };
+        }
+
+        function updatePreview() {
+            // Meta
+            document.getElementById('prev-inv-no').innerText = state.invoiceMeta.invoiceNo;
+            document.getElementById('prev-inv-date').innerText = state.invoiceMeta.date;
+            
+            // Buyer
+            document.getElementById('prev-buyer-name').innerText = state.buyer.name || '-----------';
+            document.getElementById('prev-buyer-address').innerText = state.buyer.address || '-----------';
+            document.getElementById('prev-buyer-gstin').innerText = state.buyer.gstin || '-----------';
+
+            // Items & Taxes
+            const totals = calculateTotals();
+            let itemsHtml = state.items.map((item, idx) => `
+                <div class="flex min-h-[18px]">
+                    <div class="w-[8%] p-1 text-center">${idx + 1}</div>
+                    <div class="w-[42%] p-1 pl-2 font-bold">${item.desc || '---------------------'}</div>
+                    <div class="w-[12%] p-1 text-center">${item.hsn || '-'}</div>
+                    <div class="w-[10%] p-1 text-right pr-2"><b>${item.qty}</b> ${item.per}</div>
+                    <div class="w-[10%] p-1 text-right pr-2">${parseFloat(item.rate || 0).toFixed(2)}</div>
+                    <div class="w-[6%] p-1 text-center">${item.per}</div>
+                    <div class="w-[12%] p-1 text-right font-bold pr-2">${parseFloat(item.amount || 0).toFixed(2)}</div>
+                </div>
+            `).join('');
+
+            // Tax Rows
+            itemsHtml += `
+                <div class="flex mt-6 font-medium">
+                    <div class="w-[8%] p-1"></div>
+                    <div class="w-[42%] p-1 pl-2 text-right italic font-semibold">CGST</div>
+                    <div class="w-[12%] p-1"></div>
+                    <div class="w-[10%] p-1 text-right pr-2">${state.taxes.cgst}%</div>
+                    <div class="w-[10%] p-1"></div>
+                    <div class="w-[6%] p-1"></div>
+                    <div class="w-[12%] p-1 text-right pr-2 font-bold">${totals.cgstAmt.toFixed(2)}</div>
+                </div>
+                <div class="flex font-medium">
+                    <div class="w-[8%] p-1"></div>
+                    <div class="w-[42%] p-1 pl-2 text-right italic font-semibold">SGST</div>
+                    <div class="w-[12%] p-1"></div>
+                    <div class="w-[10%] p-1 text-right pr-2">${state.taxes.sgst}%</div>
+                    <div class="w-[10%] p-1"></div>
+                    <div class="w-[6%] p-1"></div>
+                    <div class="w-[12%] p-1 text-right pr-2 font-bold">${totals.sgstAmt.toFixed(2)}</div>
+                </div>
+            `;
+            if (totals.igstAmt > 0) {
+                itemsHtml += `
+                    <div class="flex font-medium">
+                        <div class="w-[8%] p-1"></div>
+                        <div class="w-[42%] p-1 pl-2 text-right italic font-semibold">IGST</div>
+                        <div class="w-[12%] p-1"></div>
+                        <div class="w-[10%] p-1 text-right pr-2">${state.taxes.igst}%</div>
+                        <div class="w-[10%] p-1"></div>
+                        <div class="w-[6%] p-1"></div>
+                        <div class="w-[12%] p-1 text-right pr-2 font-bold">${totals.igstAmt.toFixed(2)}</div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('prev-items-body').innerHTML = itemsHtml;
+            document.getElementById('prev-grand-total').innerText = '₹ ' + totals.grandTotal.toFixed(2);
+            document.getElementById('prev-amount-words').innerText = 'INR ' + numberToWords(totals.grandTotal);
+        }
+    </script>
 </body>
 </html>
