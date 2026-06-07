@@ -49,7 +49,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-800">G.M. Enterprises</h1>
-                <p class="text-xs text-gray-500 mt-1">Invoice Management and Automated Ledger Sync</p>
+                <p class="text-xs text-gray-500 mt-1">Developed By Itransform TechnologySUBJECT TO MAHARASHTRA JURISDICTION</p>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">
                 <button onclick="handleSaveToSheets()" id="btn-save" class="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors font-medium text-sm">
@@ -115,6 +115,10 @@
                             <label class="block text-sm text-gray-600">Date</label>
                             <input type="date" id="inv-date" onchange="updateInvoiceMeta('date', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" />
                         </div>
+                        <div>
+                            <label class="block text-sm text-gray-600">Challan No.</label>
+                            <input type="text" id="inv-challan" oninput="updateInvoiceMeta('challanNo', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-mono text-gray-700" placeholder="e.g. CH/001" />
+                        </div>
                     </div>
                 </div>
 
@@ -127,18 +131,38 @@
                         </button>
                     </div>
                     <div class="space-y-3">
-                        <div>
+                        <div class="relative">
                             <label class="block text-sm text-gray-600">Buyer Name</label>
-                            <input list="saved-buyers-list" type="text" id="buyer-name" oninput="onBuyerNameChange(this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" placeholder="Search or add buyer..." />
-                            <datalist id="saved-buyers-list"></datalist>
+                            <div class="relative">
+                                <input type="text" id="buyer-name" oninput="onBuyerNameChange(this.value)" autocomplete="off" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none pr-8" placeholder="Search or add buyer..." />
+                                <svg id="buyer-search-spinner" class="animate-spin hidden absolute right-2 top-1/2 translate-y-[-30%] text-gray-400" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            </div>
+                            <!-- Dropdown suggestions -->
+                            <div id="buyer-suggestions" class="hidden absolute z-50 left-0 right-0 bg-white border border-gray-200 rounded-b shadow-lg mt-0 max-h-48 overflow-y-auto"></div>
                         </div>
                         <div>
                             <label class="block text-sm text-gray-600">Address</label>
                             <textarea id="buyer-address" oninput="updateBuyer('address', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none" rows="2"></textarea>
                         </div>
-                        <div>
-                            <label class="block text-sm text-gray-600">GSTIN</label>
-                            <input type="text" id="buyer-gstin" oninput="updateBuyer('gstin', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-mono" placeholder="27BBBBB0000B1Z5" />
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-600">GSTIN</label>
+                                <input type="text" id="buyer-gstin" oninput="updateBuyer('gstin', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-mono text-sm" placeholder="27BBBBB0000B1Z5" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">State</label>
+                                <input type="text" id="buyer-state" oninput="updateBuyer('state', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none text-sm" placeholder="Maharashtra" />
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm text-gray-600">Phone No.</label>
+                                <input type="tel" id="buyer-phone" oninput="updateBuyer('phone', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none text-sm" placeholder="9876543210" />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600">Email ID</label>
+                                <input type="email" id="buyer-email" oninput="updateBuyer('email', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none text-sm" placeholder="buyer@example.com" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -229,23 +253,27 @@
             </div>
 
             <!-- Buyer Section -->
-            <div class="flex border-b border-l border-r border-black h-[115px]">
+            <div class="flex border-b border-l border-r border-black min-h-[115px]">
                 <div class="w-1/2 border-r border-black p-2 flex flex-col justify-between">
                     <div>
                         <div class="font-bold text-[9px] uppercase tracking-wide text-gray-500">Buyer (Bill to)</div>
                         <div id="prev-buyer-name" class="font-bold text-sm uppercase mt-1"></div>
                         <div id="prev-buyer-address" class="mt-1"></div>
-                        <div class="mt-3">
+                        <div class="mt-2">
                             <span class="font-bold">GSTIN/UIN: </span> <span id="prev-buyer-gstin"></span>
                         </div>
                         <div>
                             <span class="font-bold">State Name: </span> Maharashtra, <span class="font-bold">Code:</span> 27
                         </div>
+                        <div id="prev-buyer-contact-row" class="mt-1 hidden">
+                            <span id="prev-buyer-phone-wrap"><span class="font-bold">Ph: </span><span id="prev-buyer-phone"></span></span>
+                            <span id="prev-buyer-email-wrap" class="ml-3 hidden"><span class="font-bold">Email: </span><span id="prev-buyer-email"></span></span>
+                        </div>
                     </div>
                 </div>
                 <div class="w-1/2 flex flex-col">
                     <div class="flex border-b border-black flex-1">
-                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Buyer's Order No.</div><div>-</div></div>
+                        <div class="w-1/2 border-r border-black p-1 pl-2"><div class="font-bold">Challan No.</div><div id="prev-challan-no" class="font-semibold">-</div></div>
                         <div class="w-1/2 p-1 pl-2"><div class="font-bold">Dated</div><div>-</div></div>
                     </div>
                     <div class="flex border-b border-black flex-1">
@@ -332,17 +360,18 @@
         // Global State
         const state = {
             company: { name: 'G.M.ENTERPRISES', address: 'Byculla(W)', gstin: '27AAAAA00000001', state: 'Maharashtra', stateCode: '27' },
-            buyer: { name: '', address: '', gstin: '', state: 'Maharashtra', stateCode: '27' },
-            invoiceMeta: { invoiceNo: 'INV/26-27/001', date: new Date().toISOString().split('T')[0] },
+            buyer: { name: '', address: '', gstin: '', state: 'Maharashtra', stateCode: '27', phone: '', email: '' },
+            invoiceMeta: { invoiceNo: 'INV/26-27/001', date: new Date().toISOString().split('T')[0], challanNo: '' },
             savedBuyers: [
-                { name: 'Hardik', address: 'Mumbai Central', gstin: '27AAAAA0000A1Z6', state: 'Maharashtra', stateCode: '27' },
-                { name: 'V L Astra', address: 'Thane', gstin: '27AAAAA0000A1Z7', state: 'Maharashtra', stateCode: '27' }
+                { name: 'Hardik', address: 'Mumbai Central', gstin: '27AAAAA0000A1Z6', state: 'Maharashtra', stateCode: '27', phone: '', email: '' },
+                { name: 'V L Astra', address: 'Thane', gstin: '27AAAAA0000A1Z7', state: 'Maharashtra', stateCode: '27', phone: '', email: '' }
             ],
             items: [
                 { id: Date.now(), desc: 'Consulting Services', hsn: '9983', qty: 1, rate: 5000, per: 'Nos', amount: 5000 }
             ],
             taxes: { cgst: 9, sgst: 9, igst: 0 },
-            isSaving: false
+            isSaving: false,
+            buyerSearchTimeout: null
         };
 
         // --- Number to words logic ---
@@ -498,13 +527,12 @@
 
         // --- Initialization and Binding ---
         window.onload = () => {
-            // Date and taxes set immediately
-            document.getElementById('inv-date').value = state.invoiceMeta.date;
-            document.getElementById('tax-cgst').value = state.taxes.cgst;
-            document.getElementById('tax-sgst').value = state.taxes.sgst;
-            document.getElementById('tax-igst').value = state.taxes.igst;
+            document.getElementById('inv-date').value    = state.invoiceMeta.date;
+            document.getElementById('inv-challan').value = state.invoiceMeta.challanNo;
+            document.getElementById('tax-cgst').value   = state.taxes.cgst;
+            document.getElementById('tax-sgst').value   = state.taxes.sgst;
+            document.getElementById('tax-igst').value   = state.taxes.igst;
 
-            renderDatalist();
             renderItemsForm();
             updatePreview();
 
@@ -521,18 +549,6 @@
         // Update Buyer
         function updateBuyer(field, value) {
             state.buyer[field] = value;
-            updatePreview();
-        }
-
-        function onBuyerNameChange(val) {
-            state.buyer.name = val;
-            const existing = state.savedBuyers.find(b => b.name === val);
-            if (existing) {
-                state.buyer.address = existing.address || '';
-                state.buyer.gstin = existing.gstin || '';
-                document.getElementById('buyer-address').value = state.buyer.address;
-                document.getElementById('buyer-gstin').value = state.buyer.gstin;
-            }
             updatePreview();
         }
 
@@ -598,11 +614,101 @@
             updatePreview();
         }
 
-        // --- Render Buyers List ---
-        function renderDatalist() {
-            const dl = document.getElementById('saved-buyers-list');
-            dl.innerHTML = state.savedBuyers.map(b => `<option value="${b.name}">`).join('');
+        // --- Buyer Live Search (Google Sheets) ---
+
+        // Populate all buyer form fields from a buyer object
+        function populateBuyerFields(b) {
+            state.buyer = {
+                name:      b.name      || '',
+                address:   b.address   || '',
+                gstin:     b.gstin     || '',
+                state:     b.state     || 'Maharashtra',
+                stateCode: b.stateCode || '27',
+                phone:     b.phone     || '',
+                email:     b.email     || ''
+            };
+            document.getElementById('buyer-name').value    = state.buyer.name;
+            document.getElementById('buyer-address').value = state.buyer.address;
+            document.getElementById('buyer-gstin').value   = state.buyer.gstin;
+            document.getElementById('buyer-state').value   = state.buyer.state;
+            document.getElementById('buyer-phone').value   = state.buyer.phone;
+            document.getElementById('buyer-email').value   = state.buyer.email;
+            updatePreview();
         }
+
+        function closeBuyerSuggestions() {
+            document.getElementById('buyer-suggestions').classList.add('hidden');
+            document.getElementById('buyer-suggestions').innerHTML = '';
+        }
+
+        function renderBuyerSuggestions(matches) {
+            const box = document.getElementById('buyer-suggestions');
+            if (!matches.length) { closeBuyerSuggestions(); return; }
+            box.innerHTML = matches.map((b, i) => `
+                <div data-idx="${i}" class="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b last:border-0 border-gray-100 text-sm">
+                    <div class="font-semibold text-gray-800">${b.name}</div>
+                    <div class="text-xs text-gray-400 truncate">${b.address || ''} ${b.gstin ? '· ' + b.gstin : ''}</div>
+                </div>
+            `).join('');
+            box.classList.remove('hidden');
+            // Click handler
+            box.querySelectorAll('[data-idx]').forEach(el => {
+                el.addEventListener('mousedown', e => {
+                    e.preventDefault();
+                    populateBuyerFields(matches[parseInt(el.dataset.idx)]);
+                    closeBuyerSuggestions();
+                    showToast(`Buyer "${matches[parseInt(el.dataset.idx)].name}" loaded from database`, 'success');
+                });
+            });
+        }
+
+        async function onBuyerNameChange(val) {
+            state.buyer.name = val;
+            updatePreview();
+
+            // Clear previous debounce
+            clearTimeout(state.buyerSearchTimeout);
+            closeBuyerSuggestions();
+
+            const query = val.trim();
+            if (query.length < 2) return;
+
+            // First check local cache instantly
+            const localMatches = state.savedBuyers.filter(b =>
+                b.name.toLowerCase().includes(query.toLowerCase())
+            );
+            if (localMatches.length) {
+                renderBuyerSuggestions(localMatches);
+            }
+
+            // Debounce the Sheets call by 400ms
+            state.buyerSearchTimeout = setTimeout(async () => {
+                const spinner = document.getElementById('buyer-search-spinner');
+                spinner.classList.remove('hidden');
+                try {
+                    const res  = await fetch(`${googleScriptUrl}?action=searchBuyer&q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data.buyers && data.buyers.length) {
+                        // Merge into local cache (deduplicate by name)
+                        data.buyers.forEach(b => {
+                            const idx = state.savedBuyers.findIndex(x => x.name === b.name);
+                            if (idx >= 0) state.savedBuyers[idx] = b; else state.savedBuyers.push(b);
+                        });
+                        renderBuyerSuggestions(data.buyers);
+                    } else if (!localMatches.length) {
+                        closeBuyerSuggestions();
+                    }
+                } catch(e) { /* network error — local results already shown */ }
+                finally { spinner.classList.add('hidden'); }
+            }, 400);
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', e => {
+            if (!e.target.closest('#buyer-name') && !e.target.closest('#buyer-suggestions')) {
+                closeBuyerSuggestions();
+            }
+        });
 
         // --- API Calls ---
         async function handleSaveBuyer() {
@@ -610,26 +716,25 @@
                 showToast('Please enter a buyer name', 'error');
                 return;
             }
+            // Update local cache
             const existingIndex = state.savedBuyers.findIndex(b => b.name === state.buyer.name);
             if (existingIndex >= 0) {
                 state.savedBuyers[existingIndex] = { ...state.buyer };
-                showToast('Buyer details updated in local list!');
             } else {
                 state.savedBuyers.push({ ...state.buyer });
-                showToast('New buyer saved locally!');
             }
-            renderDatalist();
-
             // Sync to Google Sheet
             const payload = { action: 'addBuyer', data: state.buyer };
             try {
-                await fetch(googleScriptUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify(payload)
-                });
-                showToast('Buyer uploaded to Google Sheets Database!');
+                const res    = await fetch(googleScriptUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+                const result = await res.json();
+                if (result.result === 'success') {
+                    showToast(`Buyer "${state.buyer.name}" saved to Google Sheets!`, 'success');
+                } else {
+                    showToast('Saved locally. Sheet sync may have failed.', 'success');
+                }
             } catch (error) {
+                showToast('Saved locally. Could not reach Google Sheets.', 'success');
                 console.error("Error saving buyer:", error);
             }
         }
@@ -643,14 +748,17 @@
             const payload = {
                 action: 'addInvoice',
                 data: {
-                    invoiceNo: state.invoiceMeta.invoiceNo,
-                    date: state.invoiceMeta.date,
+                    invoiceNo:   state.invoiceMeta.invoiceNo,
+                    date:        state.invoiceMeta.date,
+                    challanNo:   state.invoiceMeta.challanNo,
                     companyName: state.company.name,
-                    buyerName: state.buyer.name,
-                    subTotal: totals.subTotal,
-                    taxAmount: totals.cgstAmt + totals.sgstAmt + totals.igstAmt,
-                    grandTotal: totals.grandTotal,
-                    items: state.items
+                    buyerName:   state.buyer.name,
+                    buyerPhone:  state.buyer.phone,
+                    buyerEmail:  state.buyer.email,
+                    subTotal:    totals.subTotal,
+                    taxAmount:   totals.cgstAmt + totals.sgstAmt + totals.igstAmt,
+                    grandTotal:  totals.grandTotal,
+                    items:       state.items
                 }
             };
 
@@ -692,13 +800,26 @@
 
         function updatePreview() {
             // Meta
-            document.getElementById('prev-inv-no').innerText = state.invoiceMeta.invoiceNo;
+            document.getElementById('prev-inv-no').innerText   = state.invoiceMeta.invoiceNo;
             document.getElementById('prev-inv-date').innerText = state.invoiceMeta.date;
+            document.getElementById('prev-challan-no').innerText = state.invoiceMeta.challanNo || '-';
             
             // Buyer
-            document.getElementById('prev-buyer-name').innerText = state.buyer.name || '-----------';
+            document.getElementById('prev-buyer-name').innerText    = state.buyer.name    || '-----------';
             document.getElementById('prev-buyer-address').innerText = state.buyer.address || '-----------';
-            document.getElementById('prev-buyer-gstin').innerText = state.buyer.gstin || '-----------';
+            document.getElementById('prev-buyer-gstin').innerText   = state.buyer.gstin   || '-----------';
+
+            // Phone & Email — show row only when at least one is filled
+            const phone = (state.buyer.phone || '').trim();
+            const email = (state.buyer.email || '').trim();
+            const contactRow  = document.getElementById('prev-buyer-contact-row');
+            const phoneWrap   = document.getElementById('prev-buyer-phone-wrap');
+            const emailWrap   = document.getElementById('prev-buyer-email-wrap');
+            document.getElementById('prev-buyer-phone').innerText = phone;
+            document.getElementById('prev-buyer-email').innerText = email;
+            contactRow.classList.toggle('hidden', !phone && !email);
+            phoneWrap.classList.toggle('hidden', !phone);
+            emailWrap.classList.toggle('hidden', !email);
 
             // Items & Taxes
             const totals = calculateTotals();
