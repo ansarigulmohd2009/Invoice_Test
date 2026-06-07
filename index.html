@@ -96,8 +96,20 @@
                     <h2 class="font-semibold text-lg border-b pb-2 mb-4 text-gray-700">Invoice Info</h2>
                     <div class="space-y-3">
                         <div>
-                            <label class="block text-sm text-gray-600">Invoice No. <span class="text-red-500 font-bold">*</span></label>
-                            <input type="text" id="inv-no" oninput="updateInvoiceMeta('invoiceNo', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-bold text-gray-700" placeholder="e.g. INV/26-27/001" />
+                            <div class="flex justify-between items-center">
+                                <label class="block text-sm text-gray-600">Invoice No. <span class="text-red-500 font-bold">*</span></label>
+                                <div id="inv-no-status" class="flex items-center gap-1 text-xs text-gray-400">
+                                    <svg id="inv-no-spinner" class="animate-spin hidden" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                    <span id="inv-no-status-text"></span>
+                                </div>
+                            </div>
+                            <div class="relative">
+                                <input type="text" id="inv-no" oninput="updateInvoiceMeta('invoiceNo', this.value)" class="w-full border p-2 rounded mt-1 focus:border-blue-500 outline-none font-bold text-gray-700 pr-24" placeholder="Fetching…" />
+                                <button onclick="fetchNextInvoiceNo()" title="Re-fetch next invoice number from Google Sheets" class="absolute right-1 top-1/2 -translate-y-[45%] text-xs px-2 py-1 bg-gray-100 hover:bg-blue-50 hover:text-blue-600 text-gray-500 rounded border border-gray-300 transition-colors font-medium flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.65"></path></svg>
+                                    Refresh
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm text-gray-600">Date</label>
@@ -395,10 +407,98 @@
             }, 5000);
         }
 
+        // --- Auto Invoice Number ---
+
+        // Parses any invoice number matching the pattern PREFIX/YY-YY/NNN
+        // Returns { prefix, year, serial } or null if unrecognised format
+        function parseInvoiceNo(invNo) {
+            const match = String(invNo).trim().match(/^(.+?)\/(\d{2}-\d{2})\/(\d+)$/);
+            if (!match) return null;
+            return { prefix: match[1], year: match[2], serial: parseInt(match[3], 10) };
+        }
+
+        // Builds an invoice number string, padding serial to 3 digits minimum
+        function buildInvoiceNo(prefix, year, serial) {
+            return `${prefix}/${year}/${String(serial).padStart(3, '0')}`;
+        }
+
+        // Derives the current financial year string (e.g. "26-27")
+        function getCurrentFY() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = now.getMonth(); // 0-indexed; April = 3
+            const startYear = m >= 3 ? y : y - 1;
+            return `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}`;
+        }
+
+        async function fetchNextInvoiceNo() {
+            const spinner  = document.getElementById('inv-no-spinner');
+            const statusEl = document.getElementById('inv-no-status-text');
+            const input    = document.getElementById('inv-no');
+
+            spinner.classList.remove('hidden');
+            statusEl.textContent = 'Fetching from Sheets…';
+            input.disabled = true;
+
+            try {
+                const res  = await fetch(googleScriptUrl + '?action=getInvoiceNos');
+                const data = await res.json();
+
+                if (!data.invoiceNos || data.invoiceNos.length === 0) {
+                    // Sheet is empty — start fresh
+                    const fy      = getCurrentFY();
+                    const nextNo  = buildInvoiceNo('INV', fy, 1);
+                    setInvoiceNo(nextNo);
+                    statusEl.textContent = '✓ Sheet empty — starting at 001';
+                    return;
+                }
+
+                const currentFY = getCurrentFY();
+
+                // Filter only invoices matching THIS financial year
+                const parsed = data.invoiceNos
+                    .map(n => parseInvoiceNo(n))
+                    .filter(p => p && p.year === currentFY);
+
+                if (parsed.length === 0) {
+                    // No invoices for this FY yet
+                    const nextNo = buildInvoiceNo('INV', currentFY, 1);
+                    setInvoiceNo(nextNo);
+                    statusEl.textContent = `✓ New FY ${currentFY} — starting at 001`;
+                    return;
+                }
+
+                // Find the highest serial and increment
+                const maxSerial = Math.max(...parsed.map(p => p.serial));
+                // Preserve the prefix used most recently
+                const lastEntry = parsed.find(p => p.serial === maxSerial);
+                const nextNo    = buildInvoiceNo(lastEntry.prefix, currentFY, maxSerial + 1);
+
+                setInvoiceNo(nextNo);
+                statusEl.textContent = `✓ Last was ${maxSerial.toString().padStart(3,'0')} — auto-set next`;
+
+            } catch (err) {
+                console.error('fetchNextInvoiceNo failed:', err);
+                // Fallback: use local default so user isn't blocked
+                const fy     = getCurrentFY();
+                const nextNo = buildInvoiceNo('INV', fy, 1);
+                setInvoiceNo(nextNo);
+                statusEl.textContent = '⚠ Offline — defaulted to 001';
+            } finally {
+                spinner.classList.add('hidden');
+                input.disabled = false;
+            }
+        }
+
+        function setInvoiceNo(val) {
+            state.invoiceMeta.invoiceNo = val;
+            document.getElementById('inv-no').value = val;
+            updatePreview();
+        }
+
         // --- Initialization and Binding ---
         window.onload = () => {
-            // Set initial inputs
-            document.getElementById('inv-no').value = state.invoiceMeta.invoiceNo;
+            // Date and taxes set immediately
             document.getElementById('inv-date').value = state.invoiceMeta.date;
             document.getElementById('tax-cgst').value = state.taxes.cgst;
             document.getElementById('tax-sgst').value = state.taxes.sgst;
@@ -407,6 +507,9 @@
             renderDatalist();
             renderItemsForm();
             updatePreview();
+
+            // Auto-fetch next invoice number from Google Sheets
+            fetchNextInvoiceNo();
         };
 
         // Update Meta
